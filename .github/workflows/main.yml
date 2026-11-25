@@ -1,0 +1,38 @@
+name: Deploy Website
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build Website
+        working-directory: bhoomi-bandhu-main/bhoomi-bandhu-main/Bhoomi-bandhu
+        run: |
+          npm install
+          npm run build -- --base=/bhoomi-bhandhu/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: bhoomi-bandhu-main/bhoomi-bandhu-main/Bhoomi-bandhu/dist
+
+      - uses: actions/deploy-pages@v4
