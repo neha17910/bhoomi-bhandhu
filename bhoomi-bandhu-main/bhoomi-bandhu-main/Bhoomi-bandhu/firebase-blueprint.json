@@ -1,0 +1,277 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user profile for farmers, warehouse owners, psychiatrists, and company support employees.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "role": { "type": "string", "enum": ["farmer", "warehouse_owner", "psychiatrist", "support_staff"] },
+        "phone": { "type": "string", "maxLength": 24 },
+        "state": { "type": "string", "maxLength": 80 },
+        "district": { "type": "string", "maxLength": 80 },
+        "landSizeAcres": { "type": "number" },
+        "primaryCrops": { "type": "array" },
+        "specialization": { "type": "string", "maxLength": 100 },
+        "qualification": { "type": "string", "maxLength": 100 },
+        "department": { "type": "string", "maxLength": 80 },
+        "availableForConsult": { "type": "boolean" },
+        "notificationsEnabled": { "type": "boolean" },
+        "mustChangePassword": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "role", "createdAt", "updatedAt"]
+    },
+    "SavedScheme": {
+      "title": "SavedScheme",
+      "description": "A government scheme or loan bookmarked by a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "schemeId": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "schemeName": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "savedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "schemeId", "schemeName", "category", "savedAt"]
+    },
+    "PartnerCompany": {
+      "title": "PartnerCompany",
+      "description": "Admin-managed loan or crop insurance partner company listed to farmers.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "category": { "type": "string", "enum": ["loan", "insurance"] },
+        "interestOrPremium": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "coverageOrLimit": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "eligibilitySummary": { "type": "string", "minLength": 2, "maxLength": 300 },
+        "contactHelpline": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "websiteUrl": { "type": "string", "maxLength": 200, "pattern": "^https?://.*" },
+        "status": { "type": "string", "enum": ["active", "paused"] },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "category", "interestOrPremium", "coverageOrLimit", "eligibilitySummary", "contactHelpline", "status", "createdBy", "createdAt", "updatedAt"]
+    },
+    "PsychiatristDirectory": {
+      "title": "PsychiatristDirectory",
+      "description": "Non-PII public mental health specialist directory for farmer consultations.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "qualification": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "specialization": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "languages": { "type": "array" },
+        "experienceYears": { "type": "integer" },
+        "state": { "type": "string", "maxLength": 80 },
+        "bio": { "type": "string", "maxLength": 400 },
+        "availableForConsult": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "qualification", "specialization", "availableForConsult", "createdAt", "updatedAt"]
+    },
+    "PsychiatristConsultation": {
+      "title": "PsychiatristConsultation",
+      "description": "Farmer consultation request with a registered BhoomiBandhu psychiatrist.",
+      "type": "object",
+      "properties": {
+        "farmerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "farmerName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "farmerState": { "type": "string", "maxLength": 80 },
+        "psychiatristId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "psychiatristName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "preferredSlot": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "language": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "concernTopic": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "notes": { "type": "string", "minLength": 5, "maxLength": 1000 },
+        "doctorResponse": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["requested", "scheduled", "completed", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["farmerId", "farmerName", "psychiatristId", "psychiatristName", "preferredSlot", "language", "concernTopic", "notes", "status", "createdAt", "updatedAt"]
+    },
+    "WarehouseListing": {
+      "title": "WarehouseListing",
+      "description": "Public storage warehouse listing managed by a warehouse owner.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "cityState": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "distanceKm": { "type": "number" },
+        "totalCapacityMt": { "type": "number" },
+        "availableCapacityMt": { "type": "number" },
+        "pricePerQuintalMonth": { "type": "number" },
+        "facilities": { "type": "array" },
+        "description": { "type": "string", "maxLength": 600 },
+        "status": { "type": "string", "enum": ["active", "paused"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "name", "cityState", "totalCapacityMt", "availableCapacityMt", "pricePerQuintalMonth", "status", "createdAt", "updatedAt"]
+    },
+    "StorageBooking": {
+      "title": "StorageBooking",
+      "description": "Farmer request to book storage capacity in a warehouse.",
+      "type": "object",
+      "properties": {
+        "farmerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "farmerName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "warehouseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "warehouseOwnerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "warehouseName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "cropType": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string", "enum": ["kg", "quintal", "ton"] },
+        "startDate": { "type": "string", "minLength": 4, "maxLength": 20 },
+        "durationMonths": { "type": "integer" },
+        "estimatedCostInr": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 400 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["farmerId", "farmerName", "warehouseId", "warehouseOwnerId", "warehouseName", "cropType", "quantity", "unit", "startDate", "durationMonths", "estimatedCostInr", "status", "createdAt", "updatedAt"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Farmer help desk or well-being callback support request handled by company support employees and admins.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "category": { "type": "string", "enum": ["support", "complaint", "wellbeing"] },
+        "subject": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "message": { "type": "string", "minLength": 5, "maxLength": 1000 },
+        "priority": { "type": "string", "enum": ["normal", "urgent"] },
+        "assignedEmployeeId": { "type": "string", "maxLength": 128 },
+        "assignedEmployeeName": { "type": "string", "maxLength": 100 },
+        "employeeReply": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["open", "in_review", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "category", "subject", "message", "status", "createdAt", "updatedAt"]
+    },
+    "ChatSession": {
+      "title": "ChatSession",
+      "description": "Persisted multi-turn BhoomiBandhu AI chat history for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "mode": { "type": "string", "enum": ["balanced", "fast", "deep"] },
+        "messages": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "mode", "messages", "createdAt", "updatedAt"]
+    },
+    "UserNotification": {
+      "title": "UserNotification",
+      "description": "User-scoped notifications for schemes and booking status updates.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "category": { "type": "string", "enum": ["scheme", "warehouse", "system"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "category", "title", "description", "read", "createdAt"]
+    },
+    "SupportEmployeeAccess": {
+      "title": "SupportEmployeeAccess",
+      "description": "Admin-provisioned Support Desk employee invite and first-login password change tracking record.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "department": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "status": { "type": "string", "enum": ["pending_first_login", "active"] },
+        "mustChangePassword": { "type": "boolean" },
+        "emailDeliveryStatus": { "type": "string", "enum": ["sent", "outbox_generated"] },
+        "lastEmailSubject": { "type": "string", "maxLength": 160 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "department", "status", "mustChangePassword", "emailDeliveryStatus", "createdBy", "createdAt", "updatedAt"]
+    },
+    "AutomatedMailOutbox": {
+      "title": "AutomatedMailOutbox",
+      "description": "Admin-only audit log of automated no-reply access emails generated when granting employee login access.",
+      "type": "object",
+      "properties": {
+        "fromAddress": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "replyTo": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "toEmail": { "type": "string", "format": "email", "maxLength": 160 },
+        "employeeName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "subject": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "bodyPreview": { "type": "string", "minLength": 10, "maxLength": 1200 },
+        "deliveryMode": { "type": "string", "enum": ["smtp", "outbox_generated"] },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromAddress", "replyTo", "toEmail", "employeeName", "subject", "bodyPreview", "deliveryMode", "createdBy", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles isolated to the owner and administrators."
+    },
+    "/saved_schemes/{saveId}": {
+      "schema": { "$ref": "#/entities/SavedScheme" },
+      "description": "Bookmarked government schemes owned by individual users."
+    },
+    "/partner_companies/{companyId}": {
+      "schema": { "$ref": "#/entities/PartnerCompany" },
+      "description": "Admin-managed loan and crop insurance companies."
+    },
+    "/psychiatrists/{psychiatristId}": {
+      "schema": { "$ref": "#/entities/PsychiatristDirectory" },
+      "description": "Non-PII directory of mental health specialists for farmers."
+    },
+    "/psychiatrist_consultations/{consultationId}": {
+      "schema": { "$ref": "#/entities/PsychiatristConsultation" },
+      "description": "Mental health consultation requests between farmers and psychiatrists."
+    },
+    "/warehouses/{warehouseId}": {
+      "schema": { "$ref": "#/entities/WarehouseListing" },
+      "description": "Public warehouse listings managed by warehouse owners."
+    },
+    "/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/StorageBooking" },
+      "description": "Storage booking requests shared strictly between farmer and warehouse owner."
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/SupportTicket" },
+      "description": "Help and well-being support requests accessible to requester, support employees, and admins."
+    },
+    "/support_employees/{employeeId}": {
+      "schema": { "$ref": "#/entities/SupportEmployeeAccess" },
+      "description": "Admin-provisioned Support Desk employee roster and first-login password status."
+    },
+    "/mail_outbox/{mailId}": {
+      "schema": { "$ref": "#/entities/AutomatedMailOutbox" },
+      "description": "Admin-only log of automated no-reply access emails dispatched for employees."
+    },
+    "/chat_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/ChatSession" },
+      "description": "Saved multi-turn AI chat conversations owned by the user."
+    },
+    "/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/UserNotification" },
+      "description": "User-specific alerts and notifications."
+    }
+  }
+}

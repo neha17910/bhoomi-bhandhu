@@ -1,0 +1,650 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Reusable Hardened Primitives ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email_verified == true && request.auth.token.email == 'pranav25dhiman1107@gmail.com') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function hasRole(roleName) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == roleName;
+    }
+
+    function isSupportStaff() {
+      return hasRole('support_staff');
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'uid', 'name', 'email', 'role', 'phone', 'state', 'district',
+          'landSizeAcres', 'primaryCrops', 'specialization', 'qualification',
+          'department', 'availableForConsult', 'notificationsEnabled',
+          'mustChangePassword', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.role in ['farmer', 'warehouse_owner', 'psychiatrist', 'support_staff']
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 24))
+        && (!('state' in data) || (data.state is string && data.state.size() <= 80))
+        && (!('district' in data) || (data.district is string && data.district.size() <= 80))
+        && (!('landSizeAcres' in data) || (data.landSizeAcres is number && data.landSizeAcres >= 0 && data.landSizeAcres <= 100000))
+        && (!('primaryCrops' in data) || (data.primaryCrops is list && data.primaryCrops.size() <= 10 && (data.primaryCrops.size() == 0 || data.primaryCrops[0] is string)))
+        && (!('specialization' in data) || (data.specialization is string && data.specialization.size() <= 100))
+        && (!('qualification' in data) || (data.qualification is string && data.qualification.size() <= 100))
+        && (!('department' in data) || (data.department is string && data.department.size() <= 80))
+        && (!('availableForConsult' in data) || data.availableForConsult is bool)
+        && (!('notificationsEnabled' in data) || data.notificationsEnabled is bool)
+        && (!('mustChangePassword' in data) || data.mustChangePassword is bool)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSupportEmployee(data) {
+      return data.keys().hasAll([
+          'uid', 'name', 'email', 'department', 'status',
+          'mustChangePassword', 'emailDeliveryStatus', 'createdBy',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'name', 'email', 'department', 'status',
+          'mustChangePassword', 'emailDeliveryStatus', 'lastEmailSubject',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 160
+        && data.department is string && data.department.size() >= 1 && data.department.size() <= 80
+        && data.status in ['pending_first_login', 'active']
+        && data.mustChangePassword is bool
+        && data.emailDeliveryStatus in ['sent', 'outbox_generated']
+        && (!('lastEmailSubject' in data) || (data.lastEmailSubject is string && data.lastEmailSubject.size() <= 160))
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMailOutbox(data) {
+      return data.keys().hasAll([
+          'fromAddress', 'replyTo', 'toEmail', 'employeeName',
+          'subject', 'bodyPreview', 'deliveryMode', 'createdBy', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'fromAddress', 'replyTo', 'toEmail', 'employeeName',
+          'subject', 'bodyPreview', 'deliveryMode', 'createdBy', 'createdAt'
+        ])
+        && data.fromAddress is string && data.fromAddress.size() >= 3 && data.fromAddress.size() <= 160
+        && data.replyTo is string && data.replyTo.size() >= 3 && data.replyTo.size() <= 160
+        && data.toEmail is string && data.toEmail.size() >= 5 && data.toEmail.size() <= 160
+        && data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 100
+        && data.subject is string && data.subject.size() >= 2 && data.subject.size() <= 160
+        && data.bodyPreview is string && data.bodyPreview.size() >= 10 && data.bodyPreview.size() <= 1200
+        && data.deliveryMode in ['smtp', 'outbox_generated']
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSavedScheme(data) {
+      return data.keys().hasAll(['userId', 'schemeId', 'schemeName', 'category', 'savedAt'])
+        && data.keys().hasOnly(['userId', 'schemeId', 'schemeName', 'category', 'savedAt'])
+        && isValidId(data.userId)
+        && isValidId(data.schemeId)
+        && data.schemeName is string && data.schemeName.size() >= 1 && data.schemeName.size() <= 140
+        && data.category is string && data.category.size() >= 1 && data.category.size() <= 60
+        && data.savedAt is timestamp;
+    }
+
+    function isValidPartnerCompany(data) {
+      return data.keys().hasAll([
+          'name', 'category', 'interestOrPremium', 'coverageOrLimit',
+          'eligibilitySummary', 'contactHelpline', 'status', 'createdBy',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'name', 'category', 'interestOrPremium', 'coverageOrLimit',
+          'eligibilitySummary', 'contactHelpline', 'websiteUrl', 'status',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 120
+        && data.category in ['loan', 'insurance']
+        && data.interestOrPremium is string && data.interestOrPremium.size() >= 2 && data.interestOrPremium.size() <= 100
+        && data.coverageOrLimit is string && data.coverageOrLimit.size() >= 2 && data.coverageOrLimit.size() <= 120
+        && data.eligibilitySummary is string && data.eligibilitySummary.size() >= 2 && data.eligibilitySummary.size() <= 300
+        && data.contactHelpline is string && data.contactHelpline.size() >= 2 && data.contactHelpline.size() <= 60
+        && (!('websiteUrl' in data) || (data.websiteUrl is string && data.websiteUrl.size() <= 200 && (data.websiteUrl.size() == 0 || data.websiteUrl.matches('^https?://.*'))))
+        && data.status in ['active', 'paused']
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPsychiatristDirectory(data) {
+      return data.keys().hasAll([
+          'userId', 'name', 'qualification', 'specialization',
+          'availableForConsult', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'name', 'qualification', 'specialization', 'languages',
+          'experienceYears', 'state', 'bio', 'availableForConsult',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.userId)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.qualification is string && data.qualification.size() >= 2 && data.qualification.size() <= 100
+        && data.specialization is string && data.specialization.size() >= 2 && data.specialization.size() <= 120
+        && (!('languages' in data) || (data.languages is list && data.languages.size() <= 8 && (data.languages.size() == 0 || data.languages[0] is string)))
+        && (!('experienceYears' in data) || (data.experienceYears is int && data.experienceYears >= 0 && data.experienceYears <= 70))
+        && (!('state' in data) || (data.state is string && data.state.size() <= 80))
+        && (!('bio' in data) || (data.bio is string && data.bio.size() <= 400))
+        && data.availableForConsult is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPsychiatristConsultation(data) {
+      return data.keys().hasAll([
+          'farmerId', 'farmerName', 'psychiatristId', 'psychiatristName',
+          'preferredSlot', 'language', 'concernTopic', 'notes', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'farmerId', 'farmerName', 'farmerState', 'psychiatristId',
+          'psychiatristName', 'preferredSlot', 'language', 'concernTopic',
+          'notes', 'doctorResponse', 'status', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.farmerId)
+        && isValidId(data.psychiatristId)
+        && data.farmerName is string && data.farmerName.size() >= 1 && data.farmerName.size() <= 100
+        && (!('farmerState' in data) || (data.farmerState is string && data.farmerState.size() <= 80))
+        && data.psychiatristName is string && data.psychiatristName.size() >= 1 && data.psychiatristName.size() <= 100
+        && data.preferredSlot is string && data.preferredSlot.size() >= 2 && data.preferredSlot.size() <= 60
+        && data.language is string && data.language.size() >= 2 && data.language.size() <= 40
+        && data.concernTopic is string && data.concernTopic.size() >= 2 && data.concernTopic.size() <= 120
+        && data.notes is string && data.notes.size() >= 5 && data.notes.size() <= 1000
+        && (!('doctorResponse' in data) || (data.doctorResponse is string && data.doctorResponse.size() <= 1000))
+        && data.status in ['requested', 'scheduled', 'completed', 'cancelled']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWarehouse(data) {
+      return data.keys().hasAll(['ownerId', 'name', 'cityState', 'totalCapacityMt', 'availableCapacityMt', 'pricePerQuintalMonth', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'ownerId', 'name', 'cityState', 'distanceKm', 'totalCapacityMt',
+          'availableCapacityMt', 'pricePerQuintalMonth', 'facilities', 'description',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 120
+        && data.cityState is string && data.cityState.size() >= 2 && data.cityState.size() <= 120
+        && (!('distanceKm' in data) || (data.distanceKm is number && data.distanceKm >= 0 && data.distanceKm <= 5000))
+        && data.totalCapacityMt is number && data.totalCapacityMt > 0 && data.totalCapacityMt <= 500000
+        && data.availableCapacityMt is number && data.availableCapacityMt >= 0 && data.availableCapacityMt <= data.totalCapacityMt
+        && data.pricePerQuintalMonth is number && data.pricePerQuintalMonth >= 0 && data.pricePerQuintalMonth <= 50000
+        && (!('facilities' in data) || (data.facilities is list && data.facilities.size() <= 8 && (data.facilities.size() == 0 || data.facilities[0] is string)))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 600))
+        && data.status in ['active', 'paused']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll([
+          'farmerId', 'farmerName', 'warehouseId', 'warehouseOwnerId', 'warehouseName',
+          'cropType', 'quantity', 'unit', 'startDate', 'durationMonths', 'estimatedCostInr',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'farmerId', 'farmerName', 'warehouseId', 'warehouseOwnerId', 'warehouseName',
+          'cropType', 'quantity', 'unit', 'startDate', 'durationMonths', 'estimatedCostInr',
+          'notes', 'status', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.farmerId)
+        && isValidId(data.warehouseId)
+        && isValidId(data.warehouseOwnerId)
+        && data.farmerName is string && data.farmerName.size() >= 1 && data.farmerName.size() <= 100
+        && data.warehouseName is string && data.warehouseName.size() >= 1 && data.warehouseName.size() <= 120
+        && data.cropType is string && data.cropType.size() >= 1 && data.cropType.size() <= 60
+        && data.quantity is number && data.quantity > 0 && data.quantity <= 100000
+        && data.unit in ['kg', 'quintal', 'ton']
+        && data.startDate is string && data.startDate.size() >= 4 && data.startDate.size() <= 20
+        && data.durationMonths is int && data.durationMonths >= 1 && data.durationMonths <= 36
+        && data.estimatedCostInr is number && data.estimatedCostInr >= 0 && data.estimatedCostInr <= 100000000
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 400))
+        && data.status in ['pending', 'approved', 'rejected', 'cancelled']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSupportTicket(data) {
+      return data.keys().hasAll(['userId', 'category', 'subject', 'message', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'userId', 'category', 'subject', 'message', 'priority',
+          'assignedEmployeeId', 'assignedEmployeeName', 'employeeReply',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.userId)
+        && data.category in ['support', 'complaint', 'wellbeing']
+        && data.subject is string && data.subject.size() >= 2 && data.subject.size() <= 120
+        && data.message is string && data.message.size() >= 5 && data.message.size() <= 1000
+        && (!('priority' in data) || data.priority in ['normal', 'urgent'])
+        && (!('assignedEmployeeId' in data) || (data.assignedEmployeeId is string && data.assignedEmployeeId.size() <= 128))
+        && (!('assignedEmployeeName' in data) || (data.assignedEmployeeName is string && data.assignedEmployeeName.size() <= 100))
+        && (!('employeeReply' in data) || (data.employeeReply is string && data.employeeReply.size() <= 1000))
+        && data.status in ['open', 'in_review', 'resolved']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidChatSession(data) {
+      return data.keys().hasAll(['userId', 'title', 'mode', 'messages', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'title', 'mode', 'messages', 'createdAt', 'updatedAt'])
+        && isValidId(data.userId)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 100
+        && data.mode in ['balanced', 'fast', 'deep']
+        && data.messages is list && data.messages.size() <= 30
+        && (data.messages.size() == 0 || data.messages[0] is map)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'category', 'title', 'description', 'read', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'category', 'title', 'description', 'read', 'createdAt'])
+        && isValidId(data.userId)
+        && data.category in ['scheme', 'warehouse', 'system']
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 300
+        && data.read is bool
+        && data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    // Connection test doc
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // Admins registry
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && request.auth.uid == adminId;
+    }
+
+    // User Profiles (PII protected)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == userId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() || (
+            request.auth.uid == userId
+            && incoming().role in ['farmer', 'warehouse_owner', 'psychiatrist']
+            && (!('mustChangePassword' in incoming()) || incoming().mustChangePassword == false)
+          )
+        );
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && isValidUserProfile(incoming())
+        && (
+          isAdmin() || (
+            request.auth.uid == userId
+            && incoming().uid == existing().uid
+            && incoming().role == existing().role
+            && incoming().createdAt == existing().createdAt
+            && incoming().updatedAt == request.time
+            && (!('mustChangePassword' in incoming()) || incoming().mustChangePassword == false)
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'phone', 'state', 'district', 'landSizeAcres',
+              'primaryCrops', 'specialization', 'qualification', 'department',
+              'availableForConsult', 'notificationsEnabled', 'mustChangePassword', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isAdmin();
+    }
+
+    // Partner Companies for Loans & Crop Insurance (Admin-managed)
+    match /partner_companies/{companyId} {
+      allow get: if isValidId(companyId);
+      allow list: if true;
+      allow create: if isAdmin()
+        && isValidId(companyId)
+        && isValidPartnerCompany(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(companyId)
+        && isValidPartnerCompany(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(companyId);
+    }
+
+    // Non-PII Psychiatrist Directory
+    match /psychiatrists/{psychiatristId} {
+      allow get: if isValidId(psychiatristId);
+      allow list: if true;
+      allow create: if isSignedIn()
+        && isValidId(psychiatristId)
+        && isValidPsychiatristDirectory(incoming())
+        && (isAdmin() || (hasRole('psychiatrist') && incoming().userId == request.auth.uid))
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(psychiatristId)
+        && isValidPsychiatristDirectory(incoming())
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (isAdmin() || existing().userId == request.auth.uid);
+      allow delete: if isAdmin() && isValidId(psychiatristId);
+    }
+
+    // Psychiatrist Consultations (Farmer <-> Assigned Psychiatrist <-> Admin)
+    match /psychiatrist_consultations/{consultationId} {
+      allow get: if isSignedIn() && isValidId(consultationId) && (
+        existing().farmerId == request.auth.uid ||
+        existing().psychiatristId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.farmerId == request.auth.uid ||
+        resource.data.psychiatristId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn()
+        && isValidId(consultationId)
+        && isValidPsychiatristConsultation(incoming())
+        && incoming().farmerId == request.auth.uid
+        && incoming().status == 'requested'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(consultationId)
+        && isValidPsychiatristConsultation(incoming())
+        && (
+          isAdmin() || (
+            existing().status in ['requested', 'scheduled']
+            && incoming().farmerId == existing().farmerId
+            && incoming().psychiatristId == existing().psychiatristId
+            && incoming().createdAt == existing().createdAt
+            && incoming().updatedAt == request.time
+            && (
+              (
+                existing().farmerId == request.auth.uid
+                && existing().status == 'requested'
+                && incoming().status == 'cancelled'
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+              ) ||
+              (
+                existing().psychiatristId == request.auth.uid
+                && incoming().status in ['scheduled', 'completed']
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'doctorResponse', 'updatedAt'])
+              )
+            )
+          )
+        );
+      allow delete: if isAdmin() && isValidId(consultationId);
+    }
+
+    // Saved Schemes
+    match /saved_schemes/{saveId} {
+      allow get: if isSignedIn() && isValidId(saveId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn()
+        && isValidId(saveId)
+        && isValidSavedScheme(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().savedAt == request.time;
+      allow delete: if isSignedIn() && isValidId(saveId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // Warehouses (Public non-PII discovery catalog + owner management)
+    match /warehouses/{warehouseId} {
+      allow get: if isValidId(warehouseId);
+      allow list: if true;
+      allow create: if isSignedIn()
+        && isValidId(warehouseId)
+        && isValidWarehouse(incoming())
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(warehouseId)
+        && isValidWarehouse(incoming())
+        && (
+          isAdmin() || (
+            existing().ownerId == request.auth.uid
+            && incoming().ownerId == existing().ownerId
+            && incoming().createdAt == existing().createdAt
+            && incoming().updatedAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'cityState', 'distanceKm', 'totalCapacityMt',
+              'availableCapacityMt', 'pricePerQuintalMonth', 'facilities',
+              'description', 'status', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isSignedIn() && isValidId(warehouseId) && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    // Storage Bookings (Farmer <-> Warehouse Owner)
+    match /bookings/{bookingId} {
+      allow get: if isSignedIn() && isValidId(bookingId) && (
+        existing().farmerId == request.auth.uid ||
+        existing().warehouseOwnerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.farmerId == request.auth.uid ||
+        resource.data.warehouseOwnerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn()
+        && isValidId(bookingId)
+        && isValidBooking(incoming())
+        && incoming().farmerId == request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(bookingId)
+        && isValidBooking(incoming())
+        && (
+          isAdmin() || (
+            existing().status in ['pending', 'approved']
+            && incoming().farmerId == existing().farmerId
+            && incoming().warehouseId == existing().warehouseId
+            && incoming().warehouseOwnerId == existing().warehouseOwnerId
+            && incoming().createdAt == existing().createdAt
+            && incoming().updatedAt == request.time
+            && (
+              (
+                existing().farmerId == request.auth.uid
+                && existing().status == 'pending'
+                && incoming().status == 'cancelled'
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+              ) ||
+              (
+                existing().warehouseOwnerId == request.auth.uid
+                && existing().status == 'pending'
+                && incoming().status in ['approved', 'rejected']
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+              )
+            )
+          )
+        );
+      allow delete: if isAdmin();
+    }
+
+    // Support & Well-Being Callback Tickets (Requester <-> Company Support Staff <-> Admin)
+    match /support_tickets/{ticketId} {
+      allow get: if isSignedIn() && isValidId(ticketId) && (
+        existing().userId == request.auth.uid ||
+        isSupportStaff() ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isSupportStaff() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn()
+        && isValidId(ticketId)
+        && isValidSupportTicket(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(ticketId)
+        && isValidSupportTicket(incoming())
+        && (
+          isAdmin() || (
+            isSupportStaff()
+            && existing().status in ['open', 'in_review']
+            && incoming().userId == existing().userId
+            && incoming().category == existing().category
+            && incoming().subject == existing().subject
+            && incoming().message == existing().message
+            && incoming().createdAt == existing().createdAt
+            && incoming().updatedAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'assignedEmployeeId', 'assignedEmployeeName',
+              'employeeReply', 'priority', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isAdmin();
+    }
+
+    // Admin-provisioned Support Desk Employees
+    match /support_employees/{employeeId} {
+      allow get: if isSignedIn() && isValidId(employeeId) && (
+        isAdmin() ||
+        request.auth.uid == employeeId ||
+        existing().uid == request.auth.uid
+      );
+      allow list: if isSignedIn() && (isAdmin() || resource.data.uid == request.auth.uid);
+      allow create: if isAdmin()
+        && isValidId(employeeId)
+        && isValidSupportEmployee(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(employeeId)
+        && isValidSupportEmployee(incoming())
+        && (
+          isAdmin() || (
+            existing().uid == request.auth.uid
+            && existing().status == 'pending_first_login'
+            && incoming().status == 'active'
+            && incoming().mustChangePassword == false
+            && incoming().uid == existing().uid
+            && incoming().createdBy == existing().createdBy
+            && incoming().createdAt == existing().createdAt
+            && incoming().updatedAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'mustChangePassword', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isAdmin() && isValidId(employeeId);
+    }
+
+    // Admin-only Automated No-Reply Mail Outbox Log
+    match /mail_outbox/{mailId} {
+      allow get: if isAdmin() && isValidId(mailId);
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        && isValidId(mailId)
+        && isValidMailOutbox(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow delete: if isAdmin() && isValidId(mailId);
+    }
+
+    // AI Chat Sessions
+    match /chat_sessions/{sessionId} {
+      allow get: if isSignedIn() && isValidId(sessionId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn()
+        && isValidId(sessionId)
+        && isValidChatSession(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(sessionId)
+        && isValidChatSession(incoming())
+        && (
+          isAdmin() || (
+            existing().userId == request.auth.uid
+            && incoming().userId == existing().userId
+            && incoming().createdAt == existing().createdAt
+            && incoming().updatedAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'mode', 'messages', 'updatedAt'])
+          )
+        );
+      allow delete: if isSignedIn() && isValidId(sessionId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // Notifications
+    match /notifications/{notifId} {
+      allow get: if isSignedIn() && isValidId(notifId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn()
+        && isValidId(notifId)
+        && isValidNotification(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(notifId)
+        && isValidNotification(incoming())
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isSignedIn() && isValidId(notifId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+  }
+}

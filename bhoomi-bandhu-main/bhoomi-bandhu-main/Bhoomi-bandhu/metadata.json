@@ -1,0 +1,6 @@
+{
+  "name": "BhoomiBandhu",
+  "description": "A Trusted Friend for Every Farmer — unified agri-tech platform for government schemes, crop insurance, storage booking, crop recommendations, AI farming assistance, and farmer well-being.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

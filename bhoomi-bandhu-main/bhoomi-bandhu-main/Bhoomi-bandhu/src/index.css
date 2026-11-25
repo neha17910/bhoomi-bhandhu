@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+:root {
+  --bg-cream: #FAF8F3;
+  --surface-card: #FFFFFF;
+  --surface-soft-green: #EAF4EE;
+  --surface-muted: #F2EFE6;
+  --brand-green: #2D6A4F;
+  --brand-green-dark: #1E4D38;
+  --brand-amber: #E9A23B;
+  --brand-amber-hover: #DC9428;
+  --text-primary: #1B2A20;
+  --text-secondary: #4A5A4F;
+  --border-hairline: rgba(45, 106, 79, 0.14);
+}
+
+html,
+body {
+  background-color: var(--bg-cream);
+  color: var(--text-primary);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  font-family: 'Poppins', 'Plus Jakarta Sans', system-ui, sans-serif;
+  text-wrap: balance;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
